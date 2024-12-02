@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace ArchiPro\EventDispatcher;
 
 use function Amp\async;
-use function Amp\Future\await;
 
 use Amp\Cancellation;
+
 use Amp\Future;
+
+use function Amp\Future\await;
 
 use function Amp\Future\awaitAll;
 
@@ -28,7 +30,7 @@ use Throwable;
  */
 class AsyncEventDispatcher implements EventDispatcherInterface
 {
-    const THROW_ON_ERROR = 0b0001;
+    public const THROW_ON_ERROR = 0b0001;
 
     /**
      * @param ListenerProviderInterface $listenerProvider The provider of event listeners

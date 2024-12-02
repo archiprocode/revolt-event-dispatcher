@@ -13,11 +13,9 @@ use ArchiPro\EventDispatcher\AsyncEventDispatcher;
 use ArchiPro\EventDispatcher\Event\AbstractStoppableEvent;
 use ArchiPro\EventDispatcher\ListenerProvider;
 use ArchiPro\EventDispatcher\Tests\Fixture\TestEvent;
+use ColinODell\PsrTestLogger\TestLogger;
 use Exception;
 use PHPUnit\Framework\TestCase;
-use Revolt\EventLoop;
-use ColinODell\PsrTestLogger\TestLogger;
-use Throwable;
 
 /**
  * Test cases for AsyncEventDispatcher.
@@ -163,14 +161,14 @@ class AsyncEventDispatcherTest extends TestCase
 
         $futureEvent = $this->dispatcher->dispatch($event);
 
-        $futureEvent = $futureEvent->await();
+        $futureEvent->await();
 
         $this->assertTrue(
-            $futureEvent->calledOnce,
+            $event->calledOnce,
             'The first listener should have been called'
         );
         $this->assertTrue(
-            $futureEvent->calledTwice,
+            $event->calledTwice,
             'The second listener should have been called despite the failure of the first listener'
         );
 
@@ -235,7 +233,7 @@ class AsyncEventDispatcherTest extends TestCase
         $this->listenerProvider->addListener(get_class($event), function ($event) {
             throw new Exception('This exception will bubble up because we set the THROW_ON_ERROR option');
         });
-        
+
         $this->expectException(Exception::class);
         $this->expectExceptionMessage('This exception will bubble up because we set the THROW_ON_ERROR option');
 
