@@ -12,12 +12,14 @@
         "php": "^8.1",
         "psr/event-dispatcher": "^1.0",
         "revolt/event-loop": "^1.0",
-        "amphp/amp": "^3.0"
+        "amphp/amp": "^3.0",
+        "psr/log": "^1.1 || ^2.0 || ^3.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0",
         "phpstan/phpstan": "^1.10",
-        "friendsofphp/php-cs-fixer": "^3.14"
+        "friendsofphp/php-cs-fixer": "^3.14",
+        "colinodell/psr-testlogger": "^1.3"
     },
     "autoload": {
         "psr-4": {

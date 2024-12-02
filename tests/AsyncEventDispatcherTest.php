@@ -13,11 +13,9 @@ use ArchiPro\EventDispatcher\AsyncEventDispatcher;
 use ArchiPro\EventDispatcher\Event\AbstractStoppableEvent;
 use ArchiPro\EventDispatcher\ListenerProvider;
 use ArchiPro\EventDispatcher\Tests\Fixture\TestEvent;
+use ColinODell\PsrTestLogger\TestLogger;
 use Exception;
 use PHPUnit\Framework\TestCase;
-use Revolt\EventLoop;
-
-use Throwable;
 
 /**
  * Test cases for AsyncEventDispatcher.
@@ -33,6 +31,7 @@ class AsyncEventDispatcherTest extends TestCase
 {
     private ListenerProvider $listenerProvider;
     private AsyncEventDispatcher $dispatcher;
+    private TestLogger $logger;
 
     /**
      * Sets up the test environment before each test.
@@ -40,12 +39,11 @@ class AsyncEventDispatcherTest extends TestCase
     protected function setUp(): void
     {
         $this->listenerProvider = new ListenerProvider();
-        $this->dispatcher = new AsyncEventDispatcher($this->listenerProvider);
-
-        EventLoop::setErrorHandler(function (Throwable $err) {
-            throw $err;
-        });
-
+        $this->logger = new TestLogger();
+        $this->dispatcher = new AsyncEventDispatcher(
+            $this->listenerProvider,
+            $this->logger
+        );
     }
 
     /**
@@ -80,6 +78,8 @@ class AsyncEventDispatcherTest extends TestCase
         $this->assertCount(2, $results);
         $this->assertContains('listener1: test data', $results);
         $this->assertContains('listener2: test data', $results);
+
+        $this->assertCount(0, $this->logger->records, 'No errors are logged');
     }
 
     /**
@@ -103,6 +103,8 @@ class AsyncEventDispatcherTest extends TestCase
 
         $this->assertCount(1, $results);
         $this->assertEquals(['listener1'], $results);
+
+        $this->assertCount(0, $this->logger->records, 'No errors are logged');
     }
 
     /**
@@ -114,6 +116,7 @@ class AsyncEventDispatcherTest extends TestCase
         $dispatchedEvent = $this->dispatcher->dispatch($event);
 
         $this->assertSame($event, $dispatchedEvent->await());
+        $this->assertCount(0, $this->logger->records, 'No errors are logged');
     }
 
     /**
@@ -158,15 +161,21 @@ class AsyncEventDispatcherTest extends TestCase
 
         $futureEvent = $this->dispatcher->dispatch($event);
 
-        $futureEvent = $futureEvent->await();
+        $futureEvent->await();
 
         $this->assertTrue(
-            $futureEvent->calledOnce,
+            $event->calledOnce,
             'The first listener should have been called'
         );
         $this->assertTrue(
-            $futureEvent->calledTwice,
+            $event->calledTwice,
             'The second listener should have been called despite the failure of the first listener'
+        );
+
+        $this->assertCount(
+            2,
+            $this->logger->records,
+            'Errors are logged to the logger'
         );
     }
 
@@ -187,6 +196,8 @@ class AsyncEventDispatcherTest extends TestCase
         $this->expectException(CancelledException::class);
 
         $this->dispatcher->dispatch($event, $cancellation)->await();
+
+        $this->assertCount(0, $this->logger->records, 'No errors are logged');
     }
 
     public function testCancellationOfNonStoppableEvent(): void
@@ -206,6 +217,26 @@ class AsyncEventDispatcherTest extends TestCase
         $this->expectException(CancelledException::class);
 
         $this->dispatcher->dispatch($event, $cancellation)->await();
+
+        $this->assertCount(0, $this->logger->records, 'No errors are logged');
     }
 
+    public function testThrowsErrors(): void
+    {
+        $this->dispatcher = new AsyncEventDispatcher(
+            $this->listenerProvider,
+            $this->logger,
+            AsyncEventDispatcher::THROW_ON_ERROR
+        );
+
+        $event = new class () {};
+        $this->listenerProvider->addListener(get_class($event), function ($event) {
+            throw new Exception('This exception will bubble up because we set the THROW_ON_ERROR option');
+        });
+
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('This exception will bubble up because we set the THROW_ON_ERROR option');
+
+        $this->dispatcher->dispatch($event)->await();
+    }
 }
