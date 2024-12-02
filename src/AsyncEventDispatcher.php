@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ArchiPro\EventDispatcher;
 
 use function Amp\async;
+use function Amp\Future\await;
 
 use Amp\Cancellation;
 use Amp\Future;
@@ -12,9 +13,12 @@ use Amp\Future;
 use function Amp\Future\awaitAll;
 
 use Amp\NullCancellation;
+use Closure;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Psr\EventDispatcher\ListenerProviderInterface;
 use Psr\EventDispatcher\StoppableEventInterface;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * Asynchronous implementation of PSR-14 EventDispatcherInterface using Revolt and AMPHP.
@@ -24,11 +28,15 @@ use Psr\EventDispatcher\StoppableEventInterface;
  */
 class AsyncEventDispatcher implements EventDispatcherInterface
 {
+    const THROW_ON_ERROR = 0b0001;
+
     /**
      * @param ListenerProviderInterface $listenerProvider The provider of event listeners
      */
     public function __construct(
-        private readonly ListenerProviderInterface $listenerProvider
+        private readonly ListenerProviderInterface $listenerProvider,
+        private readonly ?LoggerInterface $logger = null,
+        private readonly int $options = 0b0000
     ) {
     }
 
@@ -85,7 +93,7 @@ class AsyncEventDispatcher implements EventDispatcherInterface
                 // that doesn't mean we want to block other listeners outside this loop.
                 $future = async(function () use ($event, $listener) {
                     $listener($event);
-                });
+                })->catch(Closure::fromCallable([$this, 'errorHandler']));
 
                 $future->await($cancellation);
 
@@ -120,14 +128,34 @@ class AsyncEventDispatcher implements EventDispatcherInterface
             foreach ($listeners as $listener) {
                 $futures[] = async(function () use ($event, $listener) {
                     $listener($event);
-                });
+                })->catch(Closure::fromCallable([$this, 'errorHandler']));
             }
 
             // Wait for all listeners to complete
-            awaitAll($futures, $cancellation);
+            if ($this->options & self::THROW_ON_ERROR) {
+                // Let the errors bubble up
+                await($futures, $cancellation);
+            } else {
+                // Carry on despite errors
+                awaitAll($futures, $cancellation);
+            }
 
             return $event;
         });
     }
 
+    /**
+     * Handler for errors thrown by listeners.
+     * Based on the settings provided to the constructor, this method can log the errors and/or rethrow them.
+     */
+    protected function errorHandler(Throwable $exception): void
+    {
+        if ($this->logger) {
+            $this->logger->error('Error dispatching event', ['exception' => $exception]);
+        }
+
+        if (($this->options & self::THROW_ON_ERROR) === self::THROW_ON_ERROR) {
+            throw $exception;
+        }
+    }
 }

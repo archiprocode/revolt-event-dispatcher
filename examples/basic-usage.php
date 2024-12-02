@@ -60,3 +60,17 @@ $updatedEvent = $future->await();
 $event = new UserCreatedEvent('789', 'user@example.com');
 $future = $dispatcher->dispatch($event, new TimeoutCancellation(30));
 EventLoop::run();
+
+// Set up logging for your dispatcher - all errors will be logged to PSR logger
+$logger = new ColinODell\PsrTestLogger\TestLogger();
+$dispatcher = new AsyncEventDispatcher(
+    $listenerProvider,
+    $logger
+);
+
+// Let errors bubble up. Useful for unit testing and debugging.
+$dispatcher = new AsyncEventDispatcher(
+    $listenerProvider,
+    $logger,
+    AsyncEventDispatcher::THROW_ON_ERROR
+);
